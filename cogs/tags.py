@@ -24,7 +24,7 @@ class Tags(commands.Cog):
         else:
             await ctx.send('Tag not found!')
 
-    @commands.command(name='add', aliases=['set', 'a', 's'], help='Adds a new tag.')
+    @commands.command(name='add', aliases=['set', 'a'], help='Adds a new tag.')
     async def add(self, ctx: BotContext, *, tag: str):
         ctx.database.fetch()
         current = ctx.database.get_item(GLOBAL, TAG, tag, CONTENT)
@@ -65,6 +65,31 @@ class Tags(commands.Cog):
         else:
             await ctx.send('Tag doesn\'t exist!')
 
+    @commands.command(name='rename', aliases=['change_name'], help='Renames an existing tag.')
+    async def rename(self, ctx: BotContext, *, tag: str):
+        ctx.database.fetch()
+        record = ctx.database.get_record(GLOBAL, TAG, tag)
+
+        if record:
+            if record[0][AUTHOR] == str(ctx.author.id) or await ctx.bot.is_owner(ctx.author):
+                name = await get_input(ctx, 'Enter new tag name:')
+                if name:
+                    if not ctx.database.get_record(GLOBAL, TAG, name):
+                        record[0][TAG] = name
+                        ctx.database.update_record(GLOBAL, TAG, tag, record[0])
+
+                        if ctx.database.push():
+                            await ctx.send('Tag renamed.')
+                        else:
+                            await ctx.send('Tag failed to edit!')
+                    else:
+                        await ctx.send('Tag already exists!')
+                return
+            else:
+                await ctx.send('You are not the creator of this tag!')
+        else:
+            await ctx.send('Tag doesn\'t exist!')
+
     @commands.command(name='delete', aliases=['remove', 'del', 'rem', 'd'], help='Deletes an existing tag.')
     async def delete(self, ctx: BotContext, *, tag: str):
         ctx.database.fetch()
@@ -93,6 +118,32 @@ class Tags(commands.Cog):
             await ctx.send(f'@{author.name}#{author.discriminator}' if author else 'Owner not found!')
         else:
             await ctx.send('Tag not found!')
+
+    @commands.command(name='gift', aliases=['transfer', 'trans'], help='Transfers ownership of an existing tag.')
+    async def gift(self, ctx: BotContext, *, tag: str):
+        ctx.database.fetch()
+        record = ctx.database.get_record(GLOBAL, TAG, tag)
+
+        if record:
+            if record[0][AUTHOR] == str(ctx.author.id) or await ctx.bot.is_owner(ctx.author):
+                author = await get_input(ctx, 'Which member should tag be gifted to?')
+                if author:
+                    try:
+                        member = await MEMBER_CONVERT.convert(ctx, author)
+                        record[0][AUTHOR] = member.id
+                        ctx.database.update_record(GLOBAL, TAG, tag, record[0])
+
+                        if ctx.database.push():
+                            await ctx.send('Tag gifted.')
+                        else:
+                            await ctx.send('Tag failed to edit!')
+                    except commands.BadArgument:
+                        await ctx.send('No such member found!')
+                return
+            else:
+                await ctx.send('You are not the creator of this tag!')
+        else:
+            await ctx.send('Tag doesn\'t exist!')
 
     @commands.command(name='list', aliases=['list_commands', 'listcommands', 'ls', 'l'], help='List user\'s tags.')
     async def list(self, ctx: BotContext, *, member: Optional[Member]):

@@ -23,21 +23,25 @@ CMD_DELIMITER = '/'
 CMD_CHAR = CMD_LPAR + CMD_RPAR + CMD_DELIMITER
 
 EQ = '='
+LOGIC_EQ = '=='
+NE = '~='
 GT = '>'
 LT = '<'
 GE = '>='
 LE = '<='
 
-NOT = '~'
-AND = '&'
-OR = '|'
-BOOL_CHAR = EQ + GT + LT + NOT + AND + OR
+BIT_AND = '&'
+AND = '&&'
+BIT_OR = '|'
+OR = '||'
+BOOL_CHAR = NE + GT + LT + BIT_AND + BIT_OR
 
 NEG = '-'
 ADD = '+'
 SUB = '-'
 MUL = '*'
-DIV = '\\/'
+DIV = '//'
+DIV_ESC = '\\/'
 EXP = '^'
 MATH_CHAR = ADD + SUB + MUL + DIV + EXP
 
@@ -66,6 +70,10 @@ class BotContext(Context):
 
 def strip(text: str):
     return text.lower().strip()
+
+
+def test_bool(text: str):
+    return strip(text) and strip(text) != 'false'
 
 
 def debug(out):

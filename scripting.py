@@ -14,17 +14,19 @@ class Parser:
 
     async def parse_content(self, ctx: BotContext, content: str):
         func = Forward()
+        nested = Forward()
         left, right, deliminator = map(lambda x: Suppress(Regex(fr'(?<!\\)(\{x})')), CMD_CHAR)
 
-        text = Regex(fr'((?:\\[{CMD_CHAR}]|[^{CMD_CHAR}])*)')
-        nested = Group((text(BEFORE) + Group(func)(CALL) + text(AFTER)))
         other = Regex(r'(.+)')(AFTER)
+        text = Regex(fr'((?:\\[{CMD_CHAR}]|[^{CMD_CHAR}])*)')
+        nested <<= Group((text(BEFORE) + Group(func)(CALL) + (nested | text)(AFTER))).leaveWhitespace()
         arg = nested | text
 
         args = ZeroOrMore(arg + deliminator) + arg
         func <<= (left + Word(alphas)(CMD) + Optional(CMD_SEPARATOR + args)(ARG) + right).leaveWhitespace()
         search = (nested | Group(other)).leaveWhitespace()
-        debug(nested.runTests(content))
+        search.runTests(content)
+
         output = ''
         for match in search.searchString(content):
             debug(match[0].asDict())
@@ -34,7 +36,14 @@ class Parser:
     async def parse_matches(self, ctx: BotContext, match: dict):
         if CALL in match.keys():
             result = await self.parse_command(ctx, match[CALL].get(CMD), match[CALL].get(ARG, []))
-            return f"{match.get(BEFORE, '')}{result}{match.get(AFTER, '')}"
+            if AFTER in match.keys():
+                if type(match[AFTER]) is dict:
+                    after = await self.parse_matches(ctx, match[AFTER])
+                else:
+                    after = match[AFTER]
+            else:
+                after = ''
+            return f"{match.get(BEFORE, '')}{result}{after}"
         elif AFTER in match.keys():
             return match[AFTER]
         else:
@@ -165,12 +174,28 @@ class Commands:
         return text.upper()
 
     @staticmethod
+    async def title(text: str):
+        return text.title()
+
+    @staticmethod
+    async def spoiler(text: str):
+        return f'||{text}||'
+
+    @staticmethod
     async def code(text: str):
         return f'``{text}``'
 
     @staticmethod
     async def codeblock(text: str, lang: str = ''):
         return f"```{lang.strip() if lang else ''}\n{text}\n```"
+
+    @staticmethod
+    async def length(text: str):
+        return len(text)
+
+    @staticmethod
+    async def repeat(text: str, repetitions: int = 1):
+        return text * int(repetitions)
 
     @staticmethod
     async def replace(text: str, old: str, new: str, keep_whitespace: str = 'false'):
@@ -182,15 +207,18 @@ class Commands:
     # Logical and Arithmetic Commands
     @staticmethod
     async def conditional(condition: str, if_true: str, if_false: str):
-        return if_false if strip(condition) == 'false' or not strip(condition) else if_true
+        if [char for char in BOOL_CHAR if char in condition]:
+            condition = await Commands.bool(condition)
+        return if_true if test_bool(condition) else if_false
 
-    # TODO: Boolean Parsing and Arithmetic Parsing
     @staticmethod
     async def bool(expression: str):
-        text = Regex(fr'((?:\\[{CMD_CHAR}]|[^{CMD_CHAR}])*)')
-        boolean = infixNotation(text, [(oneOf([EQ, GT, LT, GE, LE]), 2, opAssoc.LEFT), (NOT, 1, opAssoc.RIGHT),
-                                       (AND, 2, opAssoc.LEFT), (OR, 2, opAssoc.LEFT)])
-        debug(boolean.searchString(expression))
+        boolean = Regex(fr'((?:\\\\[{BOOL_CHAR}]|[^{BOOL_CHAR}\\])+)')
+        escape = Optional(Suppress('\\'))
+        boolean = infixNotation(boolean, [(escape + oneOf([EQ, LOGIC_EQ, NE, GT, LT, GE, LE]), 2, opAssoc.LEFT),
+                                          (oneOf([AND, BIT_AND]), 2, opAssoc.LEFT),
+                                          (oneOf([OR, BIT_OR]), 2, opAssoc.LEFT)])
+        boolean.runTests(expression)
         return CommandHelper.parse_bool(boolean.searchString(expression)[0])
 
     @staticmethod
@@ -198,7 +226,7 @@ class Commands:
         floats = pyparsing_common.real
         integer = pyparsing_common.signed_integer
         ops = [(NEG, 1, opAssoc.RIGHT)]
-        ops.extend([(op, 2, opAssoc.LEFT) for op in (EXP, MUL, DIV, ADD, SUB)])
+        ops.extend([(op, 2, opAssoc.LEFT) for op in (EXP, oneOf([MUL, DIV, DIV_ESC]), oneOf([ADD, SUB]))])
 
         math = infixNotation(floats | integer, ops)
         debug(math.searchString(expression)[0])
@@ -207,8 +235,12 @@ class Commands:
 
     # Misc Commands
     @staticmethod
-    async def input(ctx: BotContext, message_text: str):
-        return await get_input(ctx, message_text)
+    async def prefix():
+        return PREFIX
+
+    @staticmethod
+    async def input(ctx: BotContext, message: str):
+        return await get_input(ctx, message)
 
     @staticmethod
     async def choose(*args):
@@ -254,7 +286,8 @@ class CommandHelper:
 
                 command[CMD] = func
                 command[IS_CTX] = param_names[0] == CTX if param_names else False
-                command[IS_POSITIONAL] = list(params.values())[len(params) - 1].kind == inspect.Parameter.VAR_POSITIONAL
+                command[IS_POSITIONAL] = params and list(params.values())[len(params) - 1]\
+                    .kind == inspect.Parameter.VAR_POSITIONAL
                 command[ARG] = [arg(name, param) for name, param in params.items()
                                 if name != CTX]
                 command[IS_ARGS] = bool(command[ARG])
@@ -263,8 +296,40 @@ class CommandHelper:
         return OrderedDict(sorted(output.items()))
 
     @classmethod
-    def parse_bool(cls, match: list):
-        pass
+    def parse_bool(cls, item):
+        if type(item) is ParseResults:
+            return cls.parse_logic(item)
+        else:
+            return strip(item)
+
+    @classmethod
+    def parse_logic(cls, match: ParseResults):
+        if len(match) == 1:
+            return cls.parse_bool(match[0])
+        elif len(match) >= 3:
+            output = cls.parse_bool(match[0])
+            for i in range(1, len(match) - 1, 2):
+                try:
+                    if match[i] == EQ:
+                        output = 'true' if output == cls.parse_bool(match[i+1]) else 'false'
+                    elif match[i] == NE:
+                        output = 'true' if output != cls.parse_bool(match[i + 1]) else 'false'
+                    elif match[i] == GT:
+                        output = 'true' if float(output) > float(cls.parse_bool(match[i + 1])) else 'false'
+                    elif match[i] == LT:
+                        output = 'true' if float(output) < float(cls.parse_bool(match[i + 1])) else 'false'
+                    elif match[i] == GE:
+                        output = 'true' if float(output) >= float(cls.parse_bool(match[i + 1])) else 'false'
+                    elif match[i] == LE:
+                        output = 'true' if float(output) <= float(cls.parse_bool(match[i + 1])) else 'false'
+                    elif match[i] == AND or match[i] == BIT_AND:
+                        output = 'true' if test_bool(output) and test_bool(cls.parse_bool(match[i + 1])) else 'false'
+                    elif match[i] == OR or match[i] == BIT_OR:
+                        output = 'true' if test_bool(output) or test_bool(cls.parse_bool(match[i + 1])) else 'false'
+                except ValueError:
+                    output = 'false'
+            return output
+        return ''
 
     @classmethod
     def parse_math(cls, item):
@@ -280,15 +345,18 @@ class CommandHelper:
         elif len(match) == 2:
             if match[0] == NEG:
                 return -cls.parse_math(match[1])
-        elif len(match) == 3:
-            if match[1] == ADD:
-                return cls.parse_math(match[0]) + cls.parse_math(match[2])
-            elif match[1] == SUB:
-                return cls.parse_math(match[0]) - cls.parse_math(match[2])
-            elif match[1] == MUL:
-                return cls.parse_math(match[0]) * cls.parse_math(match[2])
-            elif match[1] == DIV:
-                return cls.parse_math(match[0]) / cls.parse_math(match[2])
-            elif match[1] == EXP:
-                return cls.parse_math(match[0]) ** cls.parse_math(match[2])
+        elif len(match) >= 3:
+            output = cls.parse_math(match[0])
+            for i in range(1, len(match) - 1, 2):
+                if match[i] == ADD:
+                    output += cls.parse_math(match[i+1])
+                elif match[i] == SUB:
+                    output -= cls.parse_math(match[i+1])
+                elif match[i] == MUL:
+                    output *= cls.parse_math(match[i+1])
+                elif match[i] == DIV or match[i] == DIV_ESC:
+                    output /= cls.parse_math(match[i+1])
+                elif match[i] == EXP:
+                    output **= cls.parse_math(match[i+1])
+            return output
         return ''

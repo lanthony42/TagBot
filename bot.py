@@ -18,7 +18,10 @@ class Bot(commands.Bot):
     async def on_ready(self):
         cogs = ('cogs.tags', 'cogs.admin')
         for cog in cogs:
-            self.load_extension(cog)
+            try:
+                self.load_extension(cog)
+            except commands.ExtensionAlreadyLoaded:
+                debug(f'{cog} has already been loaded!')
 
         await self.change_presence(status=discord.Status.do_not_disturb if IS_DEV else discord.Status.online,
                                    activity=discord.Game(name='with your code' if IS_DEV else 'with your tags'))

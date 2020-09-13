@@ -11,6 +11,7 @@ class Parser:
     def __init__(self):
         self.commands = Commands()
         self.cmd_helper = CommandHelper(self.commands)
+        self.vars = {}
 
     async def parse_content(self, ctx: BotContext, content: str):
         func = Forward()
@@ -28,9 +29,11 @@ class Parser:
         search.runTests(content)
 
         output = ''
+        self.vars[ctx.message.id] = {}
         for match in search.searchString(content):
             debug(match[0].asDict())
             output += await self.parse_matches(ctx, match[0].asDict())
+        self.vars.pop(ctx.message.id)
         return output
 
     async def parse_matches(self, ctx: BotContext, match: dict):
@@ -58,10 +61,10 @@ class Parser:
         func = self.cmd_helper.help.get(strip(command))
         if func:
             try:
+                if not func[IS_POSITIONAL]:
+                    clean_args = clean_args[:len(func[ARG])]
                 if func[IS_CTX]:
                     clean_args.insert(0, ctx)
-                elif func[IS_POSITIONAL]:
-                    clean_args = clean_args[:len(func[ARG])]
 
                 return await func[CMD](*clean_args)
             except (TypeError, ValueError, BadArgument) as error:
@@ -239,10 +242,6 @@ class Commands:
         return PREFIX
 
     @staticmethod
-    async def input(ctx: BotContext, message: str):
-        return await get_input(ctx, message)
-
-    @staticmethod
     async def choose(*args):
         choices = [arg for arg in args if arg]
 
@@ -254,6 +253,19 @@ class Commands:
     @staticmethod
     async def range(start: str, stop: str):
         return random.randint(int(start), int(stop))
+
+    @staticmethod
+    async def input(ctx: BotContext, message: str):
+        return await get_input(ctx, message)
+
+    @staticmethod
+    async def get(ctx: BotContext, variable: str):
+        return ctx.parser.vars[ctx.message.id].get(strip(variable))
+
+    @staticmethod
+    async def set(ctx: BotContext, variable: str, value: str):
+        ctx.parser.vars[ctx.message.id][strip(variable)] = value
+        return ''
 
 
 class CommandHelper:

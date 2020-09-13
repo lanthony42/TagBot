@@ -1,4 +1,5 @@
 import os
+from utils import debug
 from oauth2client.service_account import ServiceAccountCredentials
 from google.oauth2.service_account import Credentials
 from google.auth.transport.requests import AuthorizedSession
@@ -29,7 +30,7 @@ class Database:
         self.fetched_data = {}
 
         if not response.ok:
-            print(f'API ERROR: {response.text}')
+            debug(f'API ERROR: {response.text}')
             return False
 
         data = response.json()
@@ -50,7 +51,7 @@ class Database:
             if response.ok:
                 return response.json()['replies']
             else:
-                print(f'API ERROR: {response.text}')
+                debug(f'API ERROR: {response.text}')
         return []
 
     # Add to database
@@ -106,7 +107,7 @@ class Database:
             self.requests.append(request)
             return True
         else:
-            print('Item not found!')
+            debug('Item not found!')
         return False
 
     def clear_sheet(self, sheet_id: int):
@@ -125,7 +126,7 @@ class Database:
             self.del_row(self.fetched_data[sheet_name]['sheetId'], row)
             return True
         else:
-            print('Item not found!')
+            debug('Item not found!')
         return False
 
     def del_row(self, sheet_id: int, row: int):
@@ -149,9 +150,9 @@ class Database:
         if rows:
             col = search_field_index(data, field)
             output = [record[col] for record in rows]
-            return output if len(output) > 1 else output[0]
+            return output  # if len(output) > 1 else output[0]
         else:
-            print('Items not found!')
+            debug('Items not found!')
         return None
 
     def get_record(self, sheet_name: str, field: str, key: str):
@@ -159,9 +160,9 @@ class Database:
         row = query_values_for_row(data, {field: key})
         if row:
             record_dicts = [record_to_dict(data, record) for record in row]
-            return record_dicts if len(record_dicts) > 1 else record_dicts[0]
+            return record_dicts  # if len(record_dicts) > 1 else record_dicts[0]
         else:
-            print('Item not found!')
+            debug('Item not found!')
         return None
 
     # Updates database
@@ -180,7 +181,7 @@ class Database:
             self.requests.append(request)
             return True
         else:
-            print('Item not found!')
+            debug('Item not found!')
         return False
 
     def update_record(self, sheet_name: str, field: str, key: str, record: dict):
@@ -205,7 +206,7 @@ class Database:
             self.requests.append(request)
             return True
         else:
-            print('Item not found!')
+            debug('Item not found!')
         return False
 
 
@@ -233,7 +234,7 @@ def get_item(data: list, key_field: str, key: str, field: str):
         output = [record[col] for record in rows]
         return output if len(output) > 1 else output[0]
     else:
-        print('Item not found!')
+        debug('Item not found!')
         return None
 
 

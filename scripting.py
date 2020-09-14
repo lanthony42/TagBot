@@ -189,8 +189,8 @@ class Commands:
         return f'``{text}``'
 
     @staticmethod
-    async def codeblock(text: str, lang: str = ''):
-        return f"```{lang.strip() if lang else ''}\n{text}\n```"
+    async def codeblock(text: str, language: str = ''):
+        return f"```{language.strip() if language else ''}\n{text}\n```"
 
     @staticmethod
     async def length(text: str):
@@ -202,7 +202,7 @@ class Commands:
 
     @staticmethod
     async def replace(text: str, old: str, new: str, keep_whitespace: str = 'false'):
-        if strip(keep_whitespace) != 'false':
+        if test_bool(keep_whitespace):
             return text.replace(old, new)
         else:
             return text.replace(old.strip(), new.strip())
@@ -229,7 +229,7 @@ class Commands:
         floats = pyparsing_common.real
         integer = pyparsing_common.signed_integer
         ops = [(NEG, 1, opAssoc.RIGHT)]
-        ops.extend([(op, 2, opAssoc.LEFT) for op in (EXP, oneOf([MUL, DIV, DIV_ESC]), oneOf([ADD, SUB]))])
+        ops.extend([(op, 2, opAssoc.LEFT) for op in (EXP, oneOf([MUL, MUL_ALPHA, DIV, DIV_ESC]), oneOf([ADD, SUB]))])
 
         math = infixNotation(floats | integer, ops)
         debug(math.searchString(expression)[0])
@@ -280,7 +280,7 @@ class CommandHelper:
             if param.default != param.empty:
                 return f'({name})'
             elif param.kind == param.VAR_POSITIONAL:
-                return 'list'
+                return 'list of arguments'
             else:
                 return name
 
@@ -364,7 +364,7 @@ class CommandHelper:
                     output += cls.parse_math(match[i+1])
                 elif match[i] == SUB:
                     output -= cls.parse_math(match[i+1])
-                elif match[i] == MUL:
+                elif match[i] == MUL or match[i] == MUL_ALPHA:
                     output *= cls.parse_math(match[i+1])
                 elif match[i] == DIV or match[i] == DIV_ESC:
                     output /= cls.parse_math(match[i+1])

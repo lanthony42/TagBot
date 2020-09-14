@@ -40,10 +40,11 @@ NEG = '-'
 ADD = '+'
 SUB = '-'
 MUL = '*'
+MUL_ALPHA = 'x'
 DIV = '//'
 DIV_ESC = '\\/'
 EXP = '^'
-MATH_CHAR = ADD + SUB + MUL + DIV + EXP
+MATH_CHAR = ADD + SUB + MUL + MUL_ALPHA + DIV + EXP
 
 CMD = 'command'
 CALL = 'call'

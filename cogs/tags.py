@@ -193,18 +193,22 @@ class Tags(commands.Cog):
         output = []
         count = 1
         for name, info in ctx.parser.cmd_helper.help.items():
-            params = f": {', '.join(info[ARG])}"
-            output.append(f"{name}{params if info[IS_ARGS] else ''}")
+            params = f": {' / '.join(info[ARG])}"
+            output.append(f"<{name}{params if info[IS_ARGS] else ''}>")
 
             if count % MAX_LIST == 0:
                 output = '\n'.join(output)
-                pages.append(f"Script Commands:\n```\n{output}\n```")
+                pages.append(f"Script Commands:\n"
+                             f"Bracketed arguments `()` are optional.\nList of arguments are separated by `/`.\n"
+                             f"```\n{output}\n```")
                 output = []
             count += 1
 
         if len(output) > 0:
             output = '\n'.join(output)
-            pages.append(f"Script Commands:\n```\n{output}\n```")
+            pages.append(f"Script Commands:\n"
+                         f"Bracketed arguments `()` are optional.\nList of arguments are separated by `/`.\n"
+                         f"```\n{output}\n```")
         await paginate(ctx, pages)
 
     @commands.command(name='cancel', aliases=['c'], help='Cancels input.')

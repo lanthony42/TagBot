@@ -9,7 +9,8 @@ import os
 
 class Bot(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix=PREFIX, allowed_mentions=discord.AllowedMentions(everyone=False))
+        super().__init__(command_prefix=PREFIX, allowed_mentions=discord.AllowedMentions(everyone=False),
+                         intents=discord.Intents.all())
 
         key = os.getenv('SHEET_KEY')
         self.database = Database(key)
